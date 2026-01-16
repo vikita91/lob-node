@@ -10,11 +10,12 @@
     "Lob.com",
     "printing"
   ],
-  "version": "7.0.1",
+  "version": "7.1.0",
   "homepage": "https://github.com/lob/lob-node",
   "author": "Lob <support@lob.com> (https://lob.com/)",
   "dependencies": {
-    "request": "^2.88.0"
+    "axios": "^1.13.2",
+    "form-data": "^4.0.5"
   },
   "devDependencies": {
     "agentkeepalive": "^4.1.0",
@@ -28,6 +29,7 @@
     "json-2-csv": "^3.15.1",
     "mocha": "^10.0.0",
     "moment": "^2.22.1",
+    "nock": "^14.0.10",
     "nyc": "^15.1.0",
     "p-map": "^2.1.0",
     "uuid": "^3.1.0"
@@ -43,8 +45,9 @@
     "npm": ">= 11.5.1"
   },
   "scripts": {
-    "test": "cross-env NODE_ENV=test nyc mocha test --recursive --timeout 30000",
-    "test-no-cover": "cross-env NODE_ENV=test mocha test --recursive --timeout 30000",
+    "test": "cross-env NODE_ENV=test nyc mocha test",
+    "test:integration": "mocha --config test/integration/.mocharc.json",
+    "test-no-cover": "cross-env NODE_ENV=test mocha test",
     "coverage": "nyc report --reporter=text",
     "enforce": "nyc check-coverage --statements 100 --lines 100 --functions 100 --branches 100",
     "test-lcov": "nyc report --reporter=lcov",
