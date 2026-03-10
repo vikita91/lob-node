@@ -1,0 +1,49 @@
+name: SonarQube Analysis
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  sonarqube:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Create NYC folder
+        run: mkdir -p .nyc_output
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Run unit tests with coverage
+        run: npm test
+
+      - name: Generate LCOV report
+        run: npm run test-lcov
+
+      - name: Generate metrics JSON
+        run: node ../scripts/generate-metrics.js || node scripts/generate-metrics.js || true
+
+      - name: SonarQube Cloud Scan
+        uses: SonarSource/sonarcloud-github-action@v3
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload metrics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-metrics
+          path: metrics.json
+          if-no-files-found: ignore
