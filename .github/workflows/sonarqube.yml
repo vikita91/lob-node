@@ -34,7 +34,39 @@ jobs:
         continue-on-error: true
 
       - name: Generate metrics JSON
-        run: node ../scripts/generate-metrics.js || node scripts/generate-metrics.js || true
+        run: node scripts/generate-metrics.js
+
+      - name: Post test inventory to summary
+        if: always()
+        run: |
+          if [ -f metrics.json ]; then
+            node -e "
+              const m = require('./metrics.json');
+              const cov = m.coverage?.lines?.pct != null ? m.coverage.lines.pct + '%' : 'N/A';
+              const brCov = m.coverage?.branches?.pct != null ? m.coverage.branches.pct + '%' : 'N/A';
+              const fnCov = m.coverage?.functions?.pct != null ? m.coverage.functions.pct + '%' : 'N/A';
+              let md = '## 📊 Test Inventory & Coverage — ' + m.repository + '\n\n';
+              md += '| Metric | Value |\n|---|---|\n';
+              md += '| **Repository** | ' + m.repository + ' |\n';
+              md += '| **Version** | ' + m.version + ' |\n';
+              md += '| **Unit Test Files** | ' + m.tests.unitFiles + ' |\n';
+              md += '| **Integration Test Files** | ' + m.tests.integrationFiles + ' |\n';
+              md += '| **Total Test Files** | ' + m.tests.totalFiles + ' |\n';
+              md += '| **Line Coverage** | ' + cov + ' |\n';
+              md += '| **Branch Coverage** | ' + brCov + ' |\n';
+              md += '| **Function Coverage** | ' + fnCov + ' |\n\n';
+              if (m.tests.unitTestFiles.length > 0) {
+                md += '### Unit Tests\n';
+                m.tests.unitTestFiles.forEach(f => md += '- \`' + f + '\`\n');
+                md += '\n';
+              }
+              if (m.tests.integrationTestFiles.length > 0) {
+                md += '### Integration Tests\n';
+                m.tests.integrationTestFiles.forEach(f => md += '- \`' + f + '\`\n');
+              }
+              require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+            "
+          fi
 
       - name: SonarQube Cloud Scan
         uses: SonarSource/sonarcloud-github-action@v3
