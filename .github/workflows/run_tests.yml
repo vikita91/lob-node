@@ -6,12 +6,13 @@ jobs:
   node_tests:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         node: [20, 22]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Setup
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
       - name: Create NYC folder
@@ -21,6 +22,7 @@ jobs:
       - name: Run tests
         run: npm run test
       - name: Run integration tests
+        if: env.TEST_API_KEY != ''
         env:
           TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
           LIVE_API_KEY: ${{ secrets.LIVE_API_KEY }}
