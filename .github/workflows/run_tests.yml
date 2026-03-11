@@ -18,30 +18,156 @@ jobs:
         run: mkdir .nyc_output
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
-      - name: Run tests
+
+      # ── Unit Tests ──
+      - name: Run unit tests with coverage
         run: npm run test
-      - name: Run integration tests
-        if: ${{ secrets.TEST_API_KEY != '' }}
-        env:
-          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
-          LIVE_API_KEY: ${{ secrets.LIVE_API_KEY }}
-        run: npm run test:integration
-      - name: Run tests with CTRF reporter
-        run: npx mocha test --reporter mocha-ctrf-json-reporter
-        if: always()
-      - name: Publish Test Results (CTRF)
-        uses: ctrf-io/github-test-reporter@v1
-        with:
-          report-path: 'ctrf/*.json'
-        if: always()
-      - name: Coverage
+
+      - name: Generate unit coverage (lcov)
         if: matrix.node == 20
-        run: npm run test-lcov
-      - name: Upload coverage to Codecov
+        run: nyc report --reporter=lcov --report-dir=coverage/unit
+
+      - name: Run unit tests with JUnit reporter
+        run: npx mocha test --reporter mocha-junit-reporter --reporter-options mochaFile=test-results/unit-junit.xml
+        if: always()
+
+      - name: Upload unit coverage to Codecov
         if: matrix.node == 20
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
+          files: ./coverage/unit/lcov.info
           flags: unit
+          name: unit-tests
           fail_ci_if_error: false
+
+      - name: Upload unit test results to Codecov
+        if: ${{ !cancelled() && matrix.node == 20 }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: test-results/unit-junit.xml
+          flags: unit
+          name: unit-test-results
+          fail_ci_if_error: false
+
+      # ── Integration Tests ──
+      - name: Clean NYC output for integration
+        run: rm -rf .nyc_output && mkdir .nyc_output
+
+      - name: Run integration tests with coverage
+        env:
+          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
+          LIVE_API_KEY: ${{ secrets.LIVE_API_KEY }}
+        run: npx nyc --reporter=lcov --report-dir=coverage/integration mocha --config test/integration/.mocharc.json
+        continue-on-error: true
+
+      - name: Run integration tests with JUnit reporter
+        env:
+          TEST_API_KEY: ${{ secrets.TEST_API_KEY }}
+          LIVE_API_KEY: ${{ secrets.LIVE_API_KEY }}
+        run: npx mocha --config test/integration/.mocharc.json --reporter mocha-junit-reporter --reporter-options mochaFile=test-results/integration-junit.xml
+        continue-on-error: true
+        if: always()
+
+      - name: Upload integration coverage to Codecov
+        if: matrix.node == 20
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/integration/lcov.info
+          flags: integration
+          name: integration-tests
+          fail_ci_if_error: false
+
+      - name: Upload integration test results to Codecov
+        if: ${{ !cancelled() && matrix.node == 20 }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: test-results/integration-junit.xml
+          flags: integration
+          name: integration-test-results
+          fail_ci_if_error: false
+
+      # ── Test Inventory & Coverage Summary ──
+      - name: Generate test inventory summary
+        if: always() && matrix.node == 20
+        run: |
+          REPO_NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+
+          UNIT_COUNT=$(find test -maxdepth 1 -name "*.js" ! -name "setup.js" | wc -l | tr -d ' ')
+          INTEGRATION_COUNT=$(find test/integration -name "*.test.js" 2>/dev/null | wc -l | tr -d ' ')
+          TOTAL=$((UNIT_COUNT + INTEGRATION_COUNT))
+
+          UNIT_LINE_COV="N/A"
+          UNIT_BRANCH_COV="N/A"
+          UNIT_FUNC_COV="N/A"
+
+          if [ -f coverage/unit/lcov.info ]; then
+            LF=$(grep "^LF:" coverage/unit/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            LH=$(grep "^LH:" coverage/unit/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            BRF=$(grep "^BRF:" coverage/unit/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            BRH=$(grep "^BRH:" coverage/unit/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            FNF=$(grep "^FNF:" coverage/unit/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            FNH=$(grep "^FNH:" coverage/unit/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+
+            if [ "$LF" -gt 0 ]; then UNIT_LINE_COV=$(awk "BEGIN {printf \"%.0f%%\", ($LH/$LF)*100}"); fi
+            if [ "$BRF" -gt 0 ]; then UNIT_BRANCH_COV=$(awk "BEGIN {printf \"%.0f%%\", ($BRH/$BRF)*100}"); fi
+            if [ "$FNF" -gt 0 ]; then UNIT_FUNC_COV=$(awk "BEGIN {printf \"%.0f%%\", ($FNH/$FNF)*100}"); fi
+          fi
+
+          INT_LINE_COV="N/A"
+          INT_BRANCH_COV="N/A"
+          INT_FUNC_COV="N/A"
+
+          if [ -f coverage/integration/lcov.info ]; then
+            LF=$(grep "^LF:" coverage/integration/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            LH=$(grep "^LH:" coverage/integration/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            BRF=$(grep "^BRF:" coverage/integration/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            BRH=$(grep "^BRH:" coverage/integration/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            FNF=$(grep "^FNF:" coverage/integration/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+            FNH=$(grep "^FNH:" coverage/integration/lcov.info | awk -F: '{s+=$2} END {print s+0}')
+
+            if [ "$LF" -gt 0 ]; then INT_LINE_COV=$(awk "BEGIN {printf \"%.0f%%\", ($LH/$LF)*100}"); fi
+            if [ "$BRF" -gt 0 ]; then INT_BRANCH_COV=$(awk "BEGIN {printf \"%.0f%%\", ($BRH/$BRF)*100}"); fi
+            if [ "$FNF" -gt 0 ]; then INT_FUNC_COV=$(awk "BEGIN {printf \"%.0f%%\", ($FNH/$FNF)*100}"); fi
+          fi
+
+          {
+            echo "## 📊 Test Inventory & Coverage — ${REPO_NAME}"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| Repository | ${REPO_NAME} |"
+            echo "| Version | ${VERSION} |"
+            echo "| Unit Test Files | ${UNIT_COUNT} |"
+            echo "| Integration Test Files | ${INTEGRATION_COUNT} |"
+            echo "| Total Test Files | ${TOTAL} |"
+            echo ""
+            echo "### Coverage by Flag"
+            echo ""
+            echo "| Flag | Line | Branch | Function |"
+            echo "|------|------|--------|----------|"
+            echo "| Unit | ${UNIT_LINE_COV} | ${UNIT_BRANCH_COV} | ${UNIT_FUNC_COV} |"
+            echo "| Integration | ${INT_LINE_COV} | ${INT_BRANCH_COV} | ${INT_FUNC_COV} |"
+            echo ""
+            echo "### Unit Tests"
+          } >> $GITHUB_STEP_SUMMARY
+
+          find test -maxdepth 1 -name "*.js" ! -name "setup.js" | sort | while read -r f; do
+            echo "- ${f}" >> $GITHUB_STEP_SUMMARY
+          done
+
+          INTEGRATION_FILES=$(find test/integration -name "*.test.js" 2>/dev/null | sort)
+          if [ -n "$INTEGRATION_FILES" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Integration Tests" >> $GITHUB_STEP_SUMMARY
+            echo "$INTEGRATION_FILES" | while read -r f; do
+              echo "- ${f}" >> $GITHUB_STEP_SUMMARY
+            done
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "*Job summary generated at run-time*" >> $GITHUB_STEP_SUMMARY

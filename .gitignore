@@ -15,7 +15,9 @@ node_modules
 .DS_Store
 
 coverage
+ctrf/
 .nyc_output
+test-results/
 
 *.sublime-*
 .idea/
