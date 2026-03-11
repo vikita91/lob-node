@@ -29,8 +29,8 @@ jobs:
         run: npm test
         continue-on-error: true
 
-      - name: Generate LCOV report
-        run: npm run test-lcov
+      - name: Generate LCOV and HTML coverage reports
+        run: npx nyc report --reporter=lcov --reporter=html --report-dir=coverage
         continue-on-error: true
 
       - name: Generate metrics JSON
@@ -94,4 +94,12 @@ jobs:
         with:
           name: test-metrics
           path: metrics.json
+          if-no-files-found: ignore
+
+      - name: Upload HTML coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-html
+          path: coverage/
           if-no-files-found: ignore
