@@ -68,20 +68,6 @@ jobs:
             "
           fi
 
-      - name: Inject test inventory into SonarQube description
-        run: |
-          if [ -f metrics.json ]; then
-            node -e "
-              const fs = require('fs');
-              const m = require('./metrics.json');
-              const cov = m.coverage?.lines?.pct != null ? m.coverage.lines.pct + '%' : 'N/A';
-              const desc = 'Unit Tests: ' + m.tests.unitFiles + ' | Integration Tests: ' + m.tests.integrationFiles + ' | Total Test Files: ' + m.tests.totalFiles + ' | Line Coverage (LCOV): ' + cov;
-              const props = fs.readFileSync('sonar-project.properties', 'utf8');
-              const updated = props.replace(/^sonar\.projectDescription=.*$/m, '') + '\nsonar.projectDescription=' + desc + '\n';
-              fs.writeFileSync('sonar-project.properties', updated);
-            "
-          fi
-
       - name: SonarQube Cloud Scan
         uses: SonarSource/sonarcloud-github-action@v3
         env:
