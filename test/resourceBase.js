@@ -2,6 +2,7 @@
 
 const Agent = require('agentkeepalive');
 const nock = require('nock');
+const Stream = require('stream');
 
 const mockLob = mocks.mockLob;
 const fixtures = mocks.fixtures;
@@ -67,7 +68,6 @@ describe('resource base', () => {
   });
 
   it('allows a custom HTTP agent', (done) => {
-    // Create a mock server that returns 200
     nock('https://mock.lob.com')
       .post('/200')
       .reply(200, { success: true });
@@ -82,6 +82,124 @@ describe('resource base', () => {
 
     resource._transmit('POST', null, null, null, (err) => {
       expect(err).to.not.exist;
+      return done();
+    });
+  });
+
+  it('allows a custom HTTP agent for non-TLS', (done) => {
+    nock('http://mock.lob.com')
+      .post('/200')
+      .reply(200, { success: true });
+
+    const resource = new ResourceBase('', {
+      options: {
+        host: 'http://mock.lob.com/200',
+        apiKey: API_KEY,
+        agent: new Agent()
+      }
+    });
+
+    resource._transmit('POST', null, null, null, (err) => {
+      expect(err).to.not.exist;
+      return done();
+    });
+  });
+
+  it('should handle 500 errors without error body', (done) => {
+    nock('https://mock.lob.com')
+      .post('/500-plain')
+      .reply(500, { status: 'fail' });
+
+    const resource = new ResourceBase('', {
+      options: {
+        host: 'https://mock.lob.com/500-plain',
+        apiKey: API_KEY
+      }
+    });
+
+    resource._transmit('POST', null, null, null, (err) => {
+      expect(err).to.exist;
+      expect(err._response).to.exist;
+      expect(err._response.statusCode).to.eql(500);
+      return done();
+    });
+  });
+
+  it('should handle stream-based form data', (done) => {
+    nock('https://mock.lob.com')
+      .post('/stream')
+      .reply(200, { success: true });
+
+    const resource = new ResourceBase('', {
+      options: {
+        host: 'https://mock.lob.com/stream',
+        apiKey: API_KEY
+      }
+    });
+
+    const readable = new Stream.PassThrough();
+    readable.end('stream content');
+
+    resource._transmit('POST', null, null, { file: readable, name: 'test' }, (err, res) => {
+      expect(err).to.not.exist;
+      return done();
+    });
+  });
+
+  it('should handle null values in multipart form data', (done) => {
+    nock('https://mock.lob.com')
+      .post('/multipart-null')
+      .reply(200, { success: true });
+
+    const resource = new ResourceBase('', {
+      options: {
+        host: 'https://mock.lob.com/multipart-null',
+        apiKey: API_KEY
+      }
+    });
+
+    const readable = new Stream.PassThrough();
+    readable.end('stream content');
+
+    resource._transmit('POST', null, null, { file: readable, skip: null }, (err, res) => {
+      expect(err).to.not.exist;
+      return done();
+    });
+  });
+
+  it('should handle null values in url-encoded form data', (done) => {
+    nock('https://mock.lob.com')
+      .post('/form-null')
+      .reply(200, { success: true });
+
+    const resource = new ResourceBase('', {
+      options: {
+        host: 'https://mock.lob.com/form-null',
+        apiKey: API_KEY
+      }
+    });
+
+    resource._transmit('POST', null, null, { name: 'test', skip: null }, (err, res) => {
+      expect(err).to.not.exist;
+      return done();
+    });
+  });
+
+  it('should handle network errors gracefully', (done) => {
+    nock('https://mock.lob.com')
+      .post('/network-fail')
+      .replyWithError('connection refused');
+
+    const resource = new ResourceBase('', {
+      options: {
+        host: 'https://mock.lob.com/network-fail',
+        apiKey: API_KEY
+      }
+    });
+
+    resource._transmit('POST', null, null, null, (err) => {
+      expect(err).to.exist;
+      expect(err.message).to.include('connection refused');
       return done();
     });
   });

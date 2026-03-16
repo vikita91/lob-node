@@ -162,6 +162,40 @@ describe('cards', () => {
       });
     });
 
+    it('creates a card with merge_variables', (done) => {
+      mockLob()
+        .post('/v1/cards')
+        .reply(200, fixtures.CARD);
+
+      Lob.cards.create({
+        description: 'Test Card',
+        front: 'https://example.com/card.pdf',
+        back: 'https://example.com/card.pdf',
+        size: '2.125x3.375',
+        merge_variables: { name: 'Harry', company: 'Lob' }
+      }, (err, res) => {
+        expect(res.object).to.eql('card');
+        done();
+      });
+    });
+
+    it('creates a card with nested object params', (done) => {
+      mockLob()
+        .post('/v1/cards')
+        .reply(200, fixtures.CARD);
+
+      Lob.cards.create({
+        description: 'Test Card',
+        front: 'https://example.com/card.pdf',
+        back: 'https://example.com/card.pdf',
+        size: '2.125x3.375',
+        metadata: { key1: 'value1', key2: 'value2' }
+      }, (err, res) => {
+        expect(res.object).to.eql('card');
+        done();
+      });
+    });
+
     it('errors with missing front', (done) => {
       mockLob()
         .post('/v1/cards')
